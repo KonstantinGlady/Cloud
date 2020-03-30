@@ -6,14 +6,14 @@ import javafx.scene.Parent;
 import javafx.scene.Scene;
 import javafx.stage.Stage;
 
-public class Main extends Application {
+public class App extends Application {
 
     @Override
-    public void start(Stage primaryStage) throws Exception{
+    public void start(Stage stage) throws Exception{
         Parent root = FXMLLoader.load(getClass().getResource("/main.fxml"));
-        primaryStage.setTitle("Hello World");
-        primaryStage.setScene(new Scene(root, 300, 275));
-        primaryStage.show();
+        stage.setTitle("My Cloud");
+        stage.setScene(new Scene(root));
+        stage.show();
     }
 
 
