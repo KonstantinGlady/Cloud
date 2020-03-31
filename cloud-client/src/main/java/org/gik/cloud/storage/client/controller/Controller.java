@@ -52,6 +52,7 @@ public class Controller implements Initializable {
     }
 
     public void deleteOnClient(ActionEvent event) {
+        filesListClient.getItems().remove(filesListClient.getSelectionModel().getSelectedItem());
     }
 
     public void copyFromServer(ActionEvent event) throws Exception {

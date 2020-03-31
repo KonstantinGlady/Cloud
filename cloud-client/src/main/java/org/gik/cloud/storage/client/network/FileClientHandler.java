@@ -77,7 +77,7 @@ public class FileClientHandler extends ChannelInboundHandlerAdapter {
                     System.out.println("close client");
                     curState = State.INIT;
                     mType = MessageType.NONE;
-                    controller.reloadUILocal();
+                   // controller.reloadUILocal();
                     break;
                 }
             }
