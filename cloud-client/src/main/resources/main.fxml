@@ -22,9 +22,10 @@
          <children>
             <VBox prefHeight="534.0" prefWidth="350.0">
                <children>
-                  <ListView fx:id="filesListClient" onMouseClicked="#LeftItemListClicked" prefHeight="485.0" prefWidth="350.0" />
+                  <ListView fx:id="fileListClient" onMouseClicked="#LeftItemListClicked" prefHeight="485.0" prefWidth="350.0" />
                   <ButtonBar prefHeight="40.0" prefWidth="200.0">
                     <buttons>
+                        <Button mnemonicParsing="false" onAction="#RefreshList" text="refresh" />
                         <Button mnemonicParsing="false" onAction="#copyFromClient" text="Copy" />
                       <Button mnemonicParsing="false" onAction="#moveFromClient" text="Move" />
                         <Button mnemonicParsing="false" onAction="#deleteOnClient" text="Delete" />
@@ -34,7 +35,7 @@
             </VBox>
             <VBox prefHeight="534.0" prefWidth="350.0">
                <children>
-                  <ListView fx:id="filesListServer" onMouseClicked="#rightItemListClicked" prefHeight="485.0" prefWidth="350.0" />
+                  <ListView fx:id="fileListServer" onMouseClicked="#rightItemListClicked" prefHeight="485.0" prefWidth="350.0" />
                   <ButtonBar prefHeight="40.0" prefWidth="200.0">
                      <buttons>
                         <Button mnemonicParsing="false" onAction="#copyFromServer" text="Copy" />

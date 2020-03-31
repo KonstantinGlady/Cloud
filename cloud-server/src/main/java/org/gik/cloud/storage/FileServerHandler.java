@@ -17,6 +17,8 @@ import java.nio.file.Paths;
 public class FileServerHandler extends ChannelInboundHandlerAdapter {
 
 
+    public static final String SERVER_STORAGE = "serverStorage/";
+
     public enum Stat {
         INIT, LENGTH, LENGTH_PASS, NAME, PASS
     }
@@ -26,7 +28,7 @@ public class FileServerHandler extends ChannelInboundHandlerAdapter {
     private final byte AUTH_CODE_FAIL = 44;
     private final byte GET_DIR = 55;
     private final byte SEND_FILE_FROM_SERVER = 66;
-
+    private static final byte END = 99;
 
     private Stat curStat = Stat.INIT;
     private MessageType mType = MessageType.NONE;
@@ -34,21 +36,24 @@ public class FileServerHandler extends ChannelInboundHandlerAdapter {
     private String password = "";
 
     private ByteBuf buf;
+    private ChannelHandlerContext ctx;
 
     public void channelRead(ChannelHandlerContext ctx, Object obj) throws Exception {
         ByteBuf buf = ((ByteBuf) obj);
+        this.ctx = ctx;
+
 
         while (buf.readableBytes() > 0) {
             getMessageType(buf);
             switch (mType) {
                 case AUTH:
-                    authentication(ctx, buf);
+                    authentication(buf);
                     break;
                 case GET_DIR:
-                    sendDir(ctx);
+                    sendDir();
                     break;
                 case SEND_FILE_FROM_SERVER:
-                    sendFile(ctx, buf);
+                    sendFile(buf);
                     break;
                 case MOVE_FILE_FROM_SERVER:
 
@@ -64,23 +69,23 @@ public class FileServerHandler extends ChannelInboundHandlerAdapter {
         }
     }
 
-    private void sendFile(ChannelHandlerContext ctx, ByteBuf buf) throws IOException {
+    private void sendFile(ByteBuf buf) throws IOException {
         int length = getStringLength(buf);
         String name = getStringFromBuf(buf, length);
 
-        sendByte(ctx, SEND_FILE_FROM_SERVER, false);
-        Path path = Paths.get("serverStorage/" + login + "/" + name);
-        sendInt(ctx, name.length(), false);
-        sendString(ctx, name, false);
-        sendLong(ctx, Files.size(path),false);
+        sendByte(SEND_FILE_FROM_SERVER, false);
+        Path path = Paths.get(SERVER_STORAGE + login + "/" + name);
+        sendInt(name.length(), false);
+        sendString(name, false);
+        sendLong(Files.size(path), false);
 
-       FileRegion region = new DefaultFileRegion
-               (new FileInputStream(path.toFile()).getChannel(), 0, Files.size(path));
+        FileRegion region = new DefaultFileRegion
+                (new FileInputStream(path.toFile()).getChannel(), 0, Files.size(path));
         ctx.writeAndFlush(region).addListener(ChannelFutureListener.CLOSE);
-        System.out.println("serv close");
+        System.out.println("file sent");
     }
 
-    private void sendLong(ChannelHandlerContext ctx, long size, boolean flash) {
+    private void sendLong(long size, boolean flash) {
         buf = ByteBufAllocator.DEFAULT.buffer(8);
         buf.writeLong(size);
         if (flash) {
@@ -90,19 +95,20 @@ public class FileServerHandler extends ChannelInboundHandlerAdapter {
         }
     }
 
-    private void sendDir(ChannelHandlerContext ctx) throws IOException {
-        Files.list(Paths.get("serverStorage/" + login))
+    private void sendDir() throws IOException {
+
+        Files.list(Paths.get(SERVER_STORAGE + login))
                 .map(path -> path.getFileName().toString())
                 .forEach(o -> {
-                    sendByte(ctx, GET_DIR, false);
-                    sendInt(ctx, o.length(), false);
-                    sendString(ctx, o, true);
+                    sendByte(GET_DIR, false);
+                    sendInt(o.length(), false);
+                    sendString(o, true);
                 });
     }
 
-    private void sendInt(ChannelHandlerContext ctx, int strLeng, boolean flash) {
+    private void sendInt(int length, boolean flash) {
         buf = ByteBufAllocator.DEFAULT.buffer(4);
-        buf.writeInt(strLeng);
+        buf.writeInt(length);
         if (flash) {
             ctx.writeAndFlush(buf);
         } else {
@@ -110,7 +116,7 @@ public class FileServerHandler extends ChannelInboundHandlerAdapter {
         }
     }
 
-    private void sendByte(ChannelHandlerContext ctx, byte code, boolean flash) {
+    private void sendByte(byte code, boolean flash) {
         buf = ByteBufAllocator.DEFAULT.buffer(1);
         buf.writeByte(code);
         if (flash) {
@@ -121,7 +127,7 @@ public class FileServerHandler extends ChannelInboundHandlerAdapter {
 
     }
 
-    private void sendString(ChannelHandlerContext ctx, String o, boolean flash) {
+    private void sendString(String o, boolean flash) {
         byte[] bytes = o.getBytes(StandardCharsets.UTF_8);
         buf = ByteBufAllocator.DEFAULT.buffer(o.length());
         buf.writeBytes(bytes);
@@ -133,12 +139,12 @@ public class FileServerHandler extends ChannelInboundHandlerAdapter {
 
     }
 
-    private void authentication(ChannelHandlerContext ctx, ByteBuf buf) throws UnsupportedEncodingException {
+    private void authentication(ByteBuf buf) {
         parsingAuth(buf);
-        checkingUser(ctx, login, password);
+        checkingUser(login, password);
     }
 
-    private void parsingAuth(ByteBuf buf) throws UnsupportedEncodingException {
+    private void parsingAuth(ByteBuf buf) {
         int loginLength;
         int passLength;
 
@@ -154,8 +160,8 @@ public class FileServerHandler extends ChannelInboundHandlerAdapter {
         return getStringFromBuf(buf, strLength, statIn, statOut);
     }
 
-    private String getStringFromBuf(ByteBuf buf, int strLength, Stat statIn, Stat statOut) throws UnsupportedEncodingException {
-        String stringOut = "";
+    private String getStringFromBuf(ByteBuf buf, int strLength, Stat statIn, Stat statOut) {
+        String stringOut = "";//////////////////////////////////
         if (curStat == statIn) {
             byte[] name = new byte[strLength];
             buf.readBytes(name);
@@ -182,12 +188,12 @@ public class FileServerHandler extends ChannelInboundHandlerAdapter {
         return stringLength;
     }
 
-    private void checkingUser(ChannelHandlerContext ctx, String login, String password) {
+    private void checkingUser(String login, String password) {
         if (new AuthService().isLegitUser(login, password)) {
-            sendByte(ctx, AUTH_CODE_ACCEPTED, true);
+            sendByte(AUTH_CODE_ACCEPTED, true);
 
         } else {
-            sendByte(ctx, AUTH_CODE_FAIL, true);
+            sendByte(AUTH_CODE_FAIL, true);
         }
     }
 

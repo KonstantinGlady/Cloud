@@ -11,6 +11,7 @@ import java.nio.charset.StandardCharsets;
 
 public class FileClientHandler extends ChannelInboundHandlerAdapter {
 
+    public static final String LOCAL_STORAGE = "localStorage/";
 
     private MessageType mType = MessageType.NONE;
     private State curState = State.INIT;
@@ -23,6 +24,7 @@ public class FileClientHandler extends ChannelInboundHandlerAdapter {
     private static final byte AUTH_CODE_FAIL = 44;
     private static final byte GET_DIR_CODE = 55;
     private static final byte GET_FILE = 66;
+    private static final byte END = 99;
 
     private final MessageService mService;
     private Controller controller;
@@ -46,21 +48,22 @@ public class FileClientHandler extends ChannelInboundHandlerAdapter {
                 case AUTH:
                     authCodAccepted();
                     break;
+                case AUTH_CODE_FAIL:
+                    System.out.println("Authentication fail! Try again");// сделать окошко
+                    break;
                 case GET_DIR:
                     getDirFromServer(buf);
                     break;
                 case SEND_FILE_FROM_SERVER:
                     getFileFromServer(buf);
                     break;
+                case NONE:
+                    break;
             }
 
         }
         if (buf.readableBytes() == 0) {
-            if (mType != MessageType.SEND_FILE_FROM_SERVER) {
-                mType = MessageType.NONE;
-                curState = State.INIT;
-            }
-            buf.release();
+              buf.release();
         }
     }
 
@@ -77,7 +80,7 @@ public class FileClientHandler extends ChannelInboundHandlerAdapter {
                     System.out.println("close client");
                     curState = State.INIT;
                     mType = MessageType.NONE;
-                   // controller.reloadUILocal();
+                    // controller.reloadUILocal();
                     break;
                 }
             }
@@ -96,7 +99,8 @@ public class FileClientHandler extends ChannelInboundHandlerAdapter {
     private void getDirFromServer(ByteBuf buf) throws FileNotFoundException {
         int strLength = getStringLength(buf);
         String strFromBuf = getStringFromBuf(buf, strLength, false);
-        mService.getController().filesListServer.getItems().add(strFromBuf);
+        mService.getController().fileListServer.getItems().add(strFromBuf);
+        curState = State.INIT;
     }
 
     private String getStringFromBuf(ByteBuf buf, int strLength, boolean nextStateGetFile) throws FileNotFoundException {
@@ -112,7 +116,7 @@ public class FileClientHandler extends ChannelInboundHandlerAdapter {
             // buf.readBytes(bytes);
             str = new String(bytes, StandardCharsets.UTF_8);
             if (nextStateGetFile) {
-                out = new BufferedOutputStream(new FileOutputStream("localStorage/" + controller.getUserDir() + "/" + str));
+                out = new BufferedOutputStream(new FileOutputStream(LOCAL_STORAGE + controller.getUserDir() + "/" + str));
                 curState = State.FILE_LENGTH;
             } else {
                 curState = State.LENGTH;
@@ -141,7 +145,8 @@ public class FileClientHandler extends ChannelInboundHandlerAdapter {
                     curState = State.LENGTH;
                     break;
                 case AUTH_CODE_FAIL:
-                    System.out.println("try again");//заменить окошком
+                    mType = MessageType.AUTH_CODE_FAIL;
+                    curState = State.INIT;
                     break;
                 case GET_DIR_CODE:
                     mType = MessageType.GET_DIR;
@@ -150,6 +155,12 @@ public class FileClientHandler extends ChannelInboundHandlerAdapter {
                 case GET_FILE:
                     mType = MessageType.SEND_FILE_FROM_SERVER;
                     curState = State.LENGTH;
+                    break;
+                default:
+                    mType = MessageType.NONE;
+                    curState = State.INIT;
+                    break;
+
             }
         }
     }
@@ -157,7 +168,9 @@ public class FileClientHandler extends ChannelInboundHandlerAdapter {
     private void authCodAccepted() throws Exception {
         mService.getController().authPanel.setVisible(false);
         mService.getController().cloudPanel.setVisible(true);
-        controller.reloadUI();
+        curState = State.INIT;
+        mType = MessageType.NONE;
+       // controller.reloadUI();
     }
 
     @Override

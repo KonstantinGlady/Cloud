@@ -17,6 +17,7 @@ import java.util.ResourceBundle;
 
 import org.gik.cloud.storage.common.MessageType;
 
+
 public class Controller implements Initializable {
 
     @FXML
@@ -29,9 +30,9 @@ public class Controller implements Initializable {
     @FXML
     private PasswordField passField;
     @FXML
-    public ListView<String> filesListClient;
+    public ListView<String> fileListClient;
     @FXML
-    public ListView<String> filesListServer;
+    public ListView<String> fileListServer;
 
     private MessageService mService;
     private String userDir;
@@ -52,7 +53,7 @@ public class Controller implements Initializable {
     }
 
     public void deleteOnClient(ActionEvent event) {
-        filesListClient.getItems().remove(filesListClient.getSelectionModel().getSelectedItem());
+        fileListClient.getItems().remove(fileListClient.getSelectionModel().getSelectedItem());
     }
 
     public void copyFromServer(ActionEvent event) throws Exception {
@@ -77,14 +78,15 @@ public class Controller implements Initializable {
     }
 
     public void reloadUIServer() throws Exception {
+        fileListServer.getItems().clear();
         mService.sendMessage(MessageType.GET_DIR, userDir);
     }
 
     public void reloadUILocal() throws IOException {
-        filesListClient.getItems().clear();
+        fileListClient.getItems().clear();
         Files.list(Paths.get("localStorage/" +userDir))
                 .map(p -> p.getFileName().toString())
-                .forEach(o -> filesListClient.getItems().add(o));
+                .forEach(o -> fileListClient.getItems().add(o));
     }
 
     public void setUserDir(String userDir) {
@@ -96,10 +98,14 @@ public class Controller implements Initializable {
     }
 
     public void LeftItemListClicked(MouseEvent mouseEvent) {
-       leftListItem = filesListClient.getSelectionModel().getSelectedItem();
+       leftListItem = fileListClient.getSelectionModel().getSelectedItem();
     }
 
     public void rightItemListClicked(MouseEvent mouseEvent) {
-        rightListItem = filesListServer.getSelectionModel().getSelectedItem();
+        rightListItem = fileListServer.getSelectionModel().getSelectedItem();
+    }
+
+    public void RefreshList(ActionEvent event) throws Exception {
+         reloadUI();
     }
 }

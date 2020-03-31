@@ -33,38 +33,39 @@ public class MessageService {
         sendMessage(messageType, parameter, "");
     }
 
-    public void sendMessage(MessageType messageType, String parameter, String pass) throws Exception {
+    public void sendMessage(MessageType messageType, String string, String pass) throws Exception {
         if (network.getChannel() == null) {
             network.run();
             channel = network.getChannel();
         }
         switch (messageType) {
             case AUTH:
-                sendAuth(parameter, pass);
+                sendAuth(string, pass);
                 break;
             case GET_DIR:
-                getDirFromServer(parameter);
+                getDirFromServer(string);
                 break;
             case SEND_FILE_FROM_SERVER:
-                getFileFromServer(parameter);
+                getFileFromServer(string);
                 break;
         }
     }
 
-    private void getFileFromServer(String filesName) {
-//        ByteBuf buf = ByteBufAllocator.DEFAULT.buffer(1);
-//        buf.writeByte((byte)66);
-//        channel.writeAndFlush(buf);
+    private void getFileFromServer(String fileName) {
         sendByte(SEND_FILE_FROM_SERVER, false);
-        sendInt(filesName.length());
-        sendString(filesName);
+        sendInt(fileName.length());
+        sendString(fileName, true);
     }
 
-    private void sendString(String s) {
+    private void sendString(String s, boolean flash) {
         byte[] bytes = s.getBytes(StandardCharsets.UTF_8);
         buf = ByteBufAllocator.DEFAULT.buffer(s.length());
         buf.writeBytes(bytes);
-        channel.writeAndFlush(buf);
+        if (flash) {
+            channel.writeAndFlush(buf);
+        } else {
+            channel.write(buf);
+        }
     }
 
     private void sendInt(int length) {
@@ -84,36 +85,37 @@ public class MessageService {
     }
 
     private void getDirFromServer(String userDir) {
-        ByteBuf buf;
-        buf = ByteBufAllocator.DEFAULT.buffer(1);
-        buf.writeByte(GET_DIR);
-        channel.writeAndFlush(buf);
-
+        sendByte(GET_DIR, true);
     }
 
     private void sendAuth(String login, String pass) {
-        ByteBuf buf;
-        buf = ByteBufAllocator.DEFAULT.buffer(1);
-        buf.writeByte(AUTH_CODE);
-        channel.writeAndFlush(buf);
-
-        buf = ByteBufAllocator.DEFAULT.buffer(4);
-        buf.writeInt(login.length());
-        channel.writeAndFlush(buf);
-
-        byte[] bytesLogin = login.getBytes(StandardCharsets.UTF_8);
-        buf = ByteBufAllocator.DEFAULT.buffer(login.length());
-        buf.writeBytes(bytesLogin);
-        channel.writeAndFlush(buf);
-
-        buf = ByteBufAllocator.DEFAULT.buffer(4);
-        buf.writeInt(pass.length());
-        channel.writeAndFlush(buf);
-
-        byte[] bytesPass = pass.getBytes(StandardCharsets.UTF_8);
-        buf = ByteBufAllocator.DEFAULT.buffer(pass.length());
-        buf.writeBytes(bytesPass);
-        channel.writeAndFlush(buf);
+        sendByte(AUTH_CODE,false);
+        sendInt(login.length());
+        sendString(login,false);
+        sendInt(pass.length());
+        sendString(pass,true);
+//        ByteBuf buf;
+//        buf = ByteBufAllocator.DEFAULT.buffer(1);
+//        buf.writeByte(AUTH_CODE);
+//        channel.writeAndFlush(buf);
+//
+//        buf = ByteBufAllocator.DEFAULT.buffer(4);
+//        buf.writeInt(login.length());
+//        channel.writeAndFlush(buf);
+//
+//        byte[] bytesLogin = login.getBytes(StandardCharsets.UTF_8);
+//        buf = ByteBufAllocator.DEFAULT.buffer(login.length());
+//        buf.writeBytes(bytesLogin);
+//        channel.writeAndFlush(buf);
+//
+//        buf = ByteBufAllocator.DEFAULT.buffer(4);
+//        buf.writeInt(pass.length());
+//        channel.writeAndFlush(buf);
+//
+//        byte[] bytesPass = pass.getBytes(StandardCharsets.UTF_8);
+//        buf = ByteBufAllocator.DEFAULT.buffer(pass.length());
+//        buf.writeBytes(bytesPass);
+//        channel.writeAndFlush(buf);
     }
 
 
