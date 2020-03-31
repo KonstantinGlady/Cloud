@@ -9,7 +9,7 @@
 <?import javafx.scene.layout.HBox?>
 <?import javafx.scene.layout.VBox?>
 
-<AnchorPane prefHeight="534.0" prefWidth="700.0" xmlns="http://javafx.com/javafx/11.0.1" xmlns:fx="http://javafx.com/fxml/1" fx:controller="org.gik.cloud.storage.client.controller.Controller">
+<AnchorPane prefHeight="534.0" prefWidth="700.0" xmlns="http://javafx.com/javafx/8.0.241" xmlns:fx="http://javafx.com/fxml/1" fx:controller="org.gik.cloud.storage.client.controller.Controller">
    <children>
       <HBox fx:id="authPanel" alignment="TOP_CENTER" layoutX="165.0" layoutY="243.0">
          <children>

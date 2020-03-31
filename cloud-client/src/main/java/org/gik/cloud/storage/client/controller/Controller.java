@@ -75,11 +75,11 @@ public class Controller implements Initializable {
         reloadUIServer();
     }
 
-    private void reloadUIServer() throws Exception {
+    public void reloadUIServer() throws Exception {
         mService.sendMessage(MessageType.GET_DIR, userDir);
     }
 
-    private void reloadUILocal() throws IOException {
+    public void reloadUILocal() throws IOException {
         filesListClient.getItems().clear();
         Files.list(Paths.get("localStorage/" +userDir))
                 .map(p -> p.getFileName().toString())
@@ -90,14 +90,15 @@ public class Controller implements Initializable {
         this.userDir = userDir;
     }
 
+    public String getUserDir() {
+        return userDir;
+    }
 
     public void LeftItemListClicked(MouseEvent mouseEvent) {
        leftListItem = filesListClient.getSelectionModel().getSelectedItem();
-        System.out.println(leftListItem);
     }
 
     public void rightItemListClicked(MouseEvent mouseEvent) {
         rightListItem = filesListServer.getSelectionModel().getSelectedItem();
-        System.out.println(rightListItem);
     }
 }

@@ -56,36 +56,41 @@ public class FileClientHandler extends ChannelInboundHandlerAdapter {
 
         }
         if (buf.readableBytes() == 0) {
-            mType = MessageType.NONE;
-            curState = State.INIT;
+            if (mType != MessageType.SEND_FILE_FROM_SERVER) {
+                mType = MessageType.NONE;
+                curState = State.INIT;
+            }
             buf.release();
         }
     }
 
-    private void getFileFromServer(ByteBuf buf) throws IOException {
+    private void getFileFromServer(ByteBuf buf) throws Exception {
         int nameLength = getStringLength(buf);
         String name = getStringFromBuf(buf, nameLength, true);
-        fileLengthLong = getStringLengthLong(buf);
+        getStringLengthLong(buf);
         if (curState == State.WRITE_FILE) {
-            out.write(buf.readByte());
-            fileLengthLongReceived++;
-            if (fileLengthLongReceived >= fileLengthLong) {
-                out.close();
-                curState = State.INIT;
+            while (buf.readableBytes() > 0) {
+                out.write(buf.readByte());
+                fileLengthLongReceived++;
+                if (fileLengthLongReceived >= fileLengthLong) {
+                    out.close();
+                    System.out.println("close client");
+                    curState = State.INIT;
+                    mType = MessageType.NONE;
+                    controller.reloadUILocal();
+                    break;
+                }
             }
-
         }
     }
 
-    private long getStringLengthLong(ByteBuf buf) {
-        long leng = 0;
+    private void getStringLengthLong(ByteBuf buf) {
         if (curState == State.FILE_LENGTH) {
             if (buf.readableBytes() >= 8) {
-                leng = buf.readLong();
+                fileLengthLong = buf.readLong();
                 curState = State.WRITE_FILE;
             }
         }
-        return leng;
     }
 
     private void getDirFromServer(ByteBuf buf) throws FileNotFoundException {
@@ -94,14 +99,20 @@ public class FileClientHandler extends ChannelInboundHandlerAdapter {
         mService.getController().filesListServer.getItems().add(strFromBuf);
     }
 
-    private String getStringFromBuf(ByteBuf buf, int strLength, boolean nextFile) throws FileNotFoundException {
+    private String getStringFromBuf(ByteBuf buf, int strLength, boolean nextStateGetFile) throws FileNotFoundException {
         String str = "";
         if (curState == State.NAME) {
             byte[] bytes = new byte[strLength];
-            buf.readBytes(bytes);
+
+            int i = 0;
+            while (i < strLength) {
+                bytes[i] = buf.readByte();
+                i++;
+            }
+            // buf.readBytes(bytes);
             str = new String(bytes, StandardCharsets.UTF_8);
-            if (nextFile) {
-                out = new BufferedOutputStream(new FileOutputStream(str));
+            if (nextStateGetFile) {
+                out = new BufferedOutputStream(new FileOutputStream("localStorage/" + controller.getUserDir() + "/" + str));
                 curState = State.FILE_LENGTH;
             } else {
                 curState = State.LENGTH;

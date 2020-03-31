@@ -6,6 +6,7 @@ import io.netty.channel.*;
 import org.gik.cloud.storage.auth.AuthService;
 import org.gik.cloud.storage.common.MessageType;
 
+import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
 import java.nio.charset.StandardCharsets;
@@ -70,12 +71,13 @@ public class FileServerHandler extends ChannelInboundHandlerAdapter {
         sendByte(ctx, SEND_FILE_FROM_SERVER, false);
         Path path = Paths.get("serverStorage/" + login + "/" + name);
         sendInt(ctx, name.length(), false);
-        sendString(ctx, name, true);
-        sendLong(ctx, Files.size(path),true);
-//
-//        FileRegion region = new DefaultFileRegion
-//                (new FileInputStream(path.toFile()).getChannel(), 0, Files.size(path));
-//        ctx.writeAndFlush(region).addListener(ChannelFutureListener.CLOSE);
+        sendString(ctx, name, false);
+        sendLong(ctx, Files.size(path),false);
+
+       FileRegion region = new DefaultFileRegion
+               (new FileInputStream(path.toFile()).getChannel(), 0, Files.size(path));
+        ctx.writeAndFlush(region).addListener(ChannelFutureListener.CLOSE);
+        System.out.println("serv close");
     }
 
     private void sendLong(ChannelHandlerContext ctx, long size, boolean flash) {
@@ -126,7 +128,7 @@ public class FileServerHandler extends ChannelInboundHandlerAdapter {
         if (flash) {
             ctx.writeAndFlush(buf);
         } else {
-            ctx.write(bytes);
+            ctx.write(buf);
         }
 
     }
