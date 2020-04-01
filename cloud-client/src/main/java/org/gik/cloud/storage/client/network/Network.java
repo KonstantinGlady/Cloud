@@ -35,6 +35,7 @@ public class Network implements Closeable {
                 .option(ChannelOption.SO_KEEPALIVE, true)
                 .handler(new ClientChannelInitializer(this.messageService));
         currentChannel = b.connect(HOST, PORT).sync().channel();
+
     }
 
 

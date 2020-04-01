@@ -1,5 +1,6 @@
 package org.gik.cloud.storage.client.controller;
 
+import javafx.application.Platform;
 import javafx.event.ActionEvent;
 import javafx.fxml.FXML;
 import javafx.fxml.Initializable;
@@ -12,6 +13,7 @@ import javafx.scene.layout.HBox;
 import java.io.IOException;
 import java.net.URL;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ResourceBundle;
 
@@ -39,6 +41,8 @@ public class Controller implements Initializable {
     private String leftListItem;
     private String rightListItem;
 
+    public static final String LOCAL_STORAGE = "localStorage/";
+
     public void sendAuth(ActionEvent event) throws Exception {
         String login = loginField.getText();
         String pass = passField.getText();
@@ -52,8 +56,11 @@ public class Controller implements Initializable {
     public void moveFromClient(ActionEvent event) {
     }
 
-    public void deleteOnClient(ActionEvent event) {
-        fileListClient.getItems().remove(fileListClient.getSelectionModel().getSelectedItem());
+    public void deleteOnClient(ActionEvent event) throws IOException {
+        String file =fileListClient.getSelectionModel().getSelectedItem();
+        Path path = Paths.get(LOCAL_STORAGE + userDir +"/"+ file);
+        Files.delete(path);
+        fileListClient.getItems().remove(file);
     }
 
     public void copyFromServer(ActionEvent event) throws Exception {
@@ -82,9 +89,9 @@ public class Controller implements Initializable {
         mService.sendMessage(MessageType.GET_DIR, userDir);
     }
 
-    public void reloadUILocal() throws IOException {
+    public void reloadUILocal() throws Exception {
         fileListClient.getItems().clear();
-        Files.list(Paths.get("localStorage/" +userDir))
+        Files.list(Paths.get(LOCAL_STORAGE + userDir))
                 .map(p -> p.getFileName().toString())
                 .forEach(o -> fileListClient.getItems().add(o));
     }
@@ -98,7 +105,7 @@ public class Controller implements Initializable {
     }
 
     public void LeftItemListClicked(MouseEvent mouseEvent) {
-       leftListItem = fileListClient.getSelectionModel().getSelectedItem();
+        leftListItem = fileListClient.getSelectionModel().getSelectedItem();
     }
 
     public void rightItemListClicked(MouseEvent mouseEvent) {
@@ -106,6 +113,6 @@ public class Controller implements Initializable {
     }
 
     public void RefreshList(ActionEvent event) throws Exception {
-         reloadUI();
+        reloadUI();
     }
 }

@@ -28,7 +28,6 @@ public class FileServerHandler extends ChannelInboundHandlerAdapter {
     private final byte AUTH_CODE_FAIL = 44;
     private final byte GET_DIR = 55;
     private final byte SEND_FILE_FROM_SERVER = 66;
-    private static final byte END = 99;
 
     private Stat curStat = Stat.INIT;
     private MessageType mType = MessageType.NONE;
@@ -81,7 +80,7 @@ public class FileServerHandler extends ChannelInboundHandlerAdapter {
 
         FileRegion region = new DefaultFileRegion
                 (new FileInputStream(path.toFile()).getChannel(), 0, Files.size(path));
-        ctx.writeAndFlush(region).addListener(ChannelFutureListener.CLOSE);
+        ctx.writeAndFlush(region).addListener(ChannelFutureListener.CLOSE_ON_FAILURE);
         System.out.println("file sent");
     }
 
@@ -161,7 +160,7 @@ public class FileServerHandler extends ChannelInboundHandlerAdapter {
     }
 
     private String getStringFromBuf(ByteBuf buf, int strLength, Stat statIn, Stat statOut) {
-        String stringOut = "";//////////////////////////////////
+        String stringOut = "";
         if (curStat == statIn) {
             byte[] name = new byte[strLength];
             buf.readBytes(name);

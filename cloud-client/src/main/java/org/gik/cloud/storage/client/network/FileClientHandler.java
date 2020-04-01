@@ -2,6 +2,7 @@ package org.gik.cloud.storage.client.network;
 
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.*;
+import javafx.application.Platform;
 import org.gik.cloud.storage.client.controller.Controller;
 import org.gik.cloud.storage.client.controller.MessageService;
 import org.gik.cloud.storage.common.MessageType;
@@ -24,7 +25,6 @@ public class FileClientHandler extends ChannelInboundHandlerAdapter {
     private static final byte AUTH_CODE_FAIL = 44;
     private static final byte GET_DIR_CODE = 55;
     private static final byte GET_FILE = 66;
-    private static final byte END = 99;
 
     private final MessageService mService;
     private Controller controller;
@@ -69,7 +69,7 @@ public class FileClientHandler extends ChannelInboundHandlerAdapter {
 
     private void getFileFromServer(ByteBuf buf) throws Exception {
         int nameLength = getStringLength(buf);
-        String name = getStringFromBuf(buf, nameLength, true);
+        getStringFromBuf(buf, nameLength, true);
         getStringLengthLong(buf);
         if (curState == State.WRITE_FILE) {
             while (buf.readableBytes() > 0) {
@@ -77,10 +77,16 @@ public class FileClientHandler extends ChannelInboundHandlerAdapter {
                 fileLengthLongReceived++;
                 if (fileLengthLongReceived >= fileLengthLong) {
                     out.close();
-                    System.out.println("close client");
+                    System.out.println("close file");
                     curState = State.INIT;
                     mType = MessageType.NONE;
-                    // controller.reloadUILocal();
+                   Platform.runLater(() -> {
+                       try {
+                           controller.reloadUILocal();
+                       } catch (Exception e) {
+                           e.printStackTrace();
+                       }
+                   });
                     break;
                 }
             }
@@ -99,7 +105,7 @@ public class FileClientHandler extends ChannelInboundHandlerAdapter {
     private void getDirFromServer(ByteBuf buf) throws FileNotFoundException {
         int strLength = getStringLength(buf);
         String strFromBuf = getStringFromBuf(buf, strLength, false);
-        mService.getController().fileListServer.getItems().add(strFromBuf);
+       Platform.runLater(()-> mService.getController().fileListServer.getItems().add(strFromBuf));
         curState = State.INIT;
     }
 
@@ -170,7 +176,7 @@ public class FileClientHandler extends ChannelInboundHandlerAdapter {
         mService.getController().cloudPanel.setVisible(true);
         curState = State.INIT;
         mType = MessageType.NONE;
-       // controller.reloadUI();
+        controller.reloadUI();
     }
 
     @Override
