@@ -1,6 +1,5 @@
 package org.gik.cloud.storage.client.controller;
 
-import javafx.application.Platform;
 import javafx.event.ActionEvent;
 import javafx.fxml.FXML;
 import javafx.fxml.Initializable;
@@ -37,6 +36,7 @@ public class Controller implements Initializable {
     @FXML
     public ListView<String> fileListServer;
 
+
     private MessageService mService;
     private String userDir;
     private String leftListItem;
@@ -64,7 +64,7 @@ public class Controller implements Initializable {
 
     public void moveFromClient(ActionEvent event) throws Exception {
         copyFromClient(null);
-        Thread.sleep(2000);
+        Thread.sleep(1000);
         deleteOnClient(null);
 
     }
@@ -82,7 +82,7 @@ public class Controller implements Initializable {
 
     public void moveFromServer(ActionEvent event) throws Exception {
         copyFromServer(null);
-        Thread.sleep(2000);
+        Thread.sleep(1000);
         deleteOnServer(null);
     }
 
@@ -131,5 +131,9 @@ public class Controller implements Initializable {
 
     public void RefreshList(ActionEvent event) throws Exception {
         reloadUI();
+    }
+
+    public void shutDown() {
+        mService.close();
     }
 }

@@ -16,11 +16,9 @@ import java.nio.file.Paths;
 
 public class MessageService {
 
-
     private Network network;
     private Channel channel;
     private Controller controller;
-
     ByteBuf buf;
 
     private final byte AUTH_CODE = 22;
@@ -29,13 +27,14 @@ public class MessageService {
     private final byte DELETE_FILE_ON_SERVER = 77;
     private final byte SEND_FILE_TO_SERVER = 88;
 
-    public Controller getController() {
-        return controller;
-    }
-
     public MessageService(Controller controller) {
+
         this.network = new Network(this);
         this.controller = controller;
+    }
+
+    public Controller getController() {
+        return controller;
     }
 
     public void sendMessage(MessageType messageType, String parameter) throws Exception {
@@ -73,16 +72,16 @@ public class MessageService {
         sendInt(fileName.length());
         sendString(fileName, false);
         Path path = Paths.get(controller.getUserDir() + fileName);
-        sendLong(Files.size(path), false);
+        sendLong(Files.size(path));
         FileRegion region = new DefaultFileRegion
                 (new FileInputStream(path.toFile()).getChannel(), 0, Files.size(path));
         channel.writeAndFlush(region).addListener(ChannelFutureListener.CLOSE_ON_FAILURE);
     }
 
-    private void sendLong(long size, boolean flash) {
+    private void sendLong(long size) {
         ByteBuf buf = ByteBufAllocator.DEFAULT.buffer(8);
         buf.writeLong(size);
-        if (flash) {
+        if (false) {
             channel.writeAndFlush(buf);
         } else {
             channel.write(buf);
@@ -149,4 +148,7 @@ public class MessageService {
         }
     }
 
+    public void close() {
+        network.close();
+    }
 }

@@ -12,8 +12,11 @@ import java.nio.charset.StandardCharsets;
 
 public class FileClientHandler extends ChannelInboundHandlerAdapter {
 
+    public enum Stat {
+        INIT, LENGTH, FILE_LENGTH, NAME, WRITE_FILE;
+    }
     private MessageType mType = MessageType.NONE;
-    private State curState = State.INIT;
+    private Stat curState = Stat.INIT;
     private BufferedOutputStream out;
     private long fileLengthLong;
     private long fileLengthLongReceived;
@@ -25,16 +28,12 @@ public class FileClientHandler extends ChannelInboundHandlerAdapter {
     private static final byte GET_FILE = 66;
     private final byte REFRESH_UI = 99;
 
-    private final MessageService mService;
+   // private final MessageService mService;
     private Controller controller;
 
     public FileClientHandler(MessageService messageService) {
-        this.mService = messageService;
+    //    this.mService = messageService;
         this.controller = messageService.getController();
-    }
-
-    public enum State {
-        INIT, LENGTH, FILE_LENGTH, NAME, WRITE_FILE;
     }
 
     @Override
@@ -88,13 +87,13 @@ public class FileClientHandler extends ChannelInboundHandlerAdapter {
         int nameLength = getStringLength(buf);
         getStringFromBuf(buf, nameLength, true);
         getStringLengthLong(buf);
-        if (curState == State.WRITE_FILE) {
+        if (curState == Stat.WRITE_FILE) {
             while (buf.readableBytes() > 0) {
                 out.write(buf.readByte());
                 fileLengthLongReceived++;
                 if (fileLengthLongReceived >= fileLengthLong) {
                     out.close();
-                    curState = State.INIT;
+                    curState = Stat.INIT;
                     mType = MessageType.NONE;
                     fileLengthLongReceived = 0;
                     Platform.runLater(() -> {
@@ -111,10 +110,10 @@ public class FileClientHandler extends ChannelInboundHandlerAdapter {
     }
 
     private void getStringLengthLong(ByteBuf buf) {
-        if (curState == State.FILE_LENGTH) {
+        if (curState == Stat.FILE_LENGTH) {
             if (buf.readableBytes() >= 8) {
                 fileLengthLong = buf.readLong();
-                curState = State.WRITE_FILE;
+                curState = Stat.WRITE_FILE;
             }
         }
     }
@@ -122,13 +121,13 @@ public class FileClientHandler extends ChannelInboundHandlerAdapter {
     private void getDirFromServer(ByteBuf buf) throws FileNotFoundException {
         int strLength = getStringLength(buf);
         String strFromBuf = getStringFromBuf(buf, strLength, false);
-        Platform.runLater(() -> mService.getController().fileListServer.getItems().add(strFromBuf));
-        curState = State.INIT;
+        Platform.runLater(() -> controller.fileListServer.getItems().add(strFromBuf));
+        curState = Stat.INIT;
     }
 
     private String getStringFromBuf(ByteBuf buf, int strLength, boolean nextStateGetFile) throws FileNotFoundException {
         String str = "";
-        if (curState == State.NAME) {
+        if (curState == Stat.NAME) {
             byte[] bytes = new byte[strLength];
 
             int i = 0;
@@ -140,9 +139,9 @@ public class FileClientHandler extends ChannelInboundHandlerAdapter {
             str = new String(bytes, StandardCharsets.UTF_8);
             if (nextStateGetFile) {
                 out = new BufferedOutputStream(new FileOutputStream(controller.getUserDir() + str));
-                curState = State.FILE_LENGTH;
+                curState = Stat.FILE_LENGTH;
             } else {
-                curState = State.LENGTH;
+                curState = Stat.LENGTH;
             }
         }
         return str;
@@ -150,41 +149,41 @@ public class FileClientHandler extends ChannelInboundHandlerAdapter {
 
     private int getStringLength(ByteBuf buf) {
         int strLength = 0;
-        if (curState == State.LENGTH) {
+        if (curState == Stat.LENGTH) {
             if (buf.readableBytes() >= 4) {
                 strLength = buf.readInt();
-                curState = State.NAME;
+                curState = Stat.NAME;
             }
         }
         return strLength;
     }
 
     private void getMessageType(ByteBuf buf) {
-        if (curState == State.INIT) {
+        if (curState == Stat.INIT) {
             byte messageType = buf.readByte();
             switch (messageType) {
                 case AUTH_CODE_ACCEPTED:
                     mType = MessageType.AUTH;
-                    curState = State.LENGTH;
+                    curState = Stat.LENGTH;
                     break;
                 case AUTH_CODE_FAIL:
                     mType = MessageType.AUTH_CODE_FAIL;
-                    curState = State.INIT;
+                    curState = Stat.INIT;
                     break;
                 case GET_DIR_CODE:
                     mType = MessageType.GET_DIR;
-                    curState = State.LENGTH;
+                    curState = Stat.LENGTH;
                     break;
                 case GET_FILE:
                     mType = MessageType.SEND_FILE_FROM_SERVER;
-                    curState = State.LENGTH;
+                    curState = Stat.LENGTH;
                     break;
                 case REFRESH_UI:
                     mType = MessageType.REFRESH_UI;
                     break;
                 default:
                     mType = MessageType.NONE;
-                    curState = State.INIT;
+                    curState = Stat.INIT;
                     break;
 
             }
@@ -192,9 +191,9 @@ public class FileClientHandler extends ChannelInboundHandlerAdapter {
     }
 
     private void authCodAccepted() throws Exception {
-        mService.getController().authPanel.setVisible(false);
-        mService.getController().cloudPanel.setVisible(true);
-        curState = State.INIT;
+        controller.authPanel.setVisible(false);
+        controller.cloudPanel.setVisible(true);
+        curState = Stat.INIT;
         mType = MessageType.NONE;
         controller.reloadUI();
     }
