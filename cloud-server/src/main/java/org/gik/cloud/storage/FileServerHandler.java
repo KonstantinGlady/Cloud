@@ -6,9 +6,7 @@ import io.netty.channel.*;
 import org.gik.cloud.storage.auth.AuthService;
 import org.gik.cloud.storage.common.MessageType;
 
-import java.io.FileInputStream;
-import java.io.IOException;
-import java.io.UnsupportedEncodingException;
+import java.io.*;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -20,7 +18,7 @@ public class FileServerHandler extends ChannelInboundHandlerAdapter {
     public static final String SERVER_STORAGE = "serverStorage/";
 
     public enum Stat {
-        INIT, LENGTH, LENGTH_PASS, NAME, PASS
+        INIT, LENGTH, LENGTH_PASS, FILE_LENGTH, WRITE_FILE, NAME, PASS;
     }
 
     private final byte AUTH_CODE = 22;
@@ -28,14 +26,21 @@ public class FileServerHandler extends ChannelInboundHandlerAdapter {
     private final byte AUTH_CODE_FAIL = 44;
     private final byte GET_DIR = 55;
     private final byte SEND_FILE_FROM_SERVER = 66;
+    private final byte DELETE_FILE_ON_SERVER = 77;
+    private final byte SEND_FILE_TO_SERVER = 88;
+    private  final byte REFRESH_UI = 99;
 
     private Stat curStat = Stat.INIT;
     private MessageType mType = MessageType.NONE;
     private String login = "";
     private String password = "";
 
+    private BufferedOutputStream out;
     private ByteBuf buf;
     private ChannelHandlerContext ctx;
+
+    private long fileLengthLong;
+    private long fileLengthLongReceived;
 
     public void channelRead(ChannelHandlerContext ctx, Object obj) throws Exception {
         ByteBuf buf = ((ByteBuf) obj);
@@ -57,15 +62,81 @@ public class FileServerHandler extends ChannelInboundHandlerAdapter {
                 case MOVE_FILE_FROM_SERVER:
 
                     break;
+                case DELETE:
+                    deleteFile(buf);
+                    break;
+                case SEND_FILE_TO_SERVER:
+                    getFileFromClient(buf);
+                    break;
             }
-
         }
-
 
         if (buf.readableBytes() == 0) {
-            curStat = Stat.INIT;
             buf.release();
         }
+    }
+
+    private void getFileFromClient(ByteBuf buf) throws IOException {
+        int nameLength = getNameLength(buf);
+        getFileName(buf, nameLength);
+        getStringLengthLong(buf);
+        if (curStat == Stat.WRITE_FILE) {
+            while (buf.readableBytes() > 0) {
+                out.write(buf.readByte());
+                fileLengthLongReceived++;
+                if (fileLengthLongReceived >= fileLengthLong) {
+                    out.close();
+                    curStat = Stat.INIT;
+                    mType = MessageType.NONE;
+                    fileLengthLongReceived = 0;
+                           sendByte(REFRESH_UI, true);
+                    break;
+                }
+            }
+        }
+
+    }
+    private void getStringLengthLong(ByteBuf buf) {
+        if (curStat == Stat.FILE_LENGTH) {
+            if (buf.readableBytes() >= 8) {
+                fileLengthLong = buf.readLong();
+                curStat = Stat.WRITE_FILE;
+            }
+        }
+    }
+    private int getNameLength(ByteBuf buf) {
+        int strLength = 0;
+        if (curStat == Stat.LENGTH) {
+            if (buf.readableBytes() >= 4) {
+                strLength = buf.readInt();
+                curStat = Stat.NAME;
+            }
+        }
+        return strLength;
+    }
+    private void getFileName(ByteBuf buf, int strLength) throws FileNotFoundException {
+        if (curStat == Stat.NAME) {
+            byte[] bytes = new byte[strLength];
+
+            int i = 0;
+            while (i < strLength) {
+                bytes[i] = buf.readByte();
+                i++;
+            }
+            String str = new String(bytes, StandardCharsets.UTF_8);
+            out = new BufferedOutputStream(new FileOutputStream(SERVER_STORAGE + login + "/" + str));
+            curStat = Stat.FILE_LENGTH;
+        }
+    }
+
+
+    private void deleteFile(ByteBuf buf) throws IOException {
+        int length = getStringLength(buf);
+        String name = getStringFromBuf(buf, length);
+
+        Path path = Paths.get(SERVER_STORAGE + login + "/" + name);
+        Files.delete(path);
+        curStat = Stat.INIT;
     }
 
     private void sendFile(ByteBuf buf) throws IOException {
@@ -81,7 +152,6 @@ public class FileServerHandler extends ChannelInboundHandlerAdapter {
         FileRegion region = new DefaultFileRegion
                 (new FileInputStream(path.toFile()).getChannel(), 0, Files.size(path));
         ctx.writeAndFlush(region).addListener(ChannelFutureListener.CLOSE_ON_FAILURE);
-        System.out.println("file sent");
     }
 
     private void sendLong(long size, boolean flash) {
@@ -103,6 +173,7 @@ public class FileServerHandler extends ChannelInboundHandlerAdapter {
                     sendInt(o.length(), false);
                     sendString(o, true);
                 });
+        curStat = Stat.INIT;
     }
 
     private void sendInt(int length, boolean flash) {
@@ -153,7 +224,7 @@ public class FileServerHandler extends ChannelInboundHandlerAdapter {
         password = getStringFromBuf(buf, passLength, Stat.PASS, Stat.INIT);
     }
 
-    private String getStringFromBuf(ByteBuf buf, int strLength) throws UnsupportedEncodingException {
+    private String getStringFromBuf(ByteBuf buf, int strLength) {
         Stat statIn = Stat.NAME;
         Stat statOut = Stat.INIT;
         return getStringFromBuf(buf, strLength, statIn, statOut);
@@ -168,6 +239,7 @@ public class FileServerHandler extends ChannelInboundHandlerAdapter {
             stringOut = new String(name, StandardCharsets.UTF_8);
         }
         return stringOut;
+
     }
 
     private int getStringLength(ByteBuf buf) {
@@ -194,6 +266,7 @@ public class FileServerHandler extends ChannelInboundHandlerAdapter {
         } else {
             sendByte(AUTH_CODE_FAIL, true);
         }
+        curStat = Stat.INIT;
     }
 
     private void getMessageType(ByteBuf buf) {
@@ -206,13 +279,17 @@ public class FileServerHandler extends ChannelInboundHandlerAdapter {
                 mType = MessageType.GET_DIR;
             } else if (messageType == SEND_FILE_FROM_SERVER) {
                 mType = MessageType.SEND_FILE_FROM_SERVER;
+            } else if (messageType == DELETE_FILE_ON_SERVER) {
+                mType = MessageType.DELETE;
+            } else if (messageType == SEND_FILE_TO_SERVER) {
+                mType = MessageType.SEND_FILE_TO_SERVER;
             }
         }
     }
 
 
     @Override
-    public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {
+    public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) {
         cause.printStackTrace();
         if (ctx.channel().isActive()) {
             ctx.writeAndFlush("ERR: " + cause.getClass().getSimpleName() + " : " +

@@ -4,6 +4,7 @@ import javafx.application.Platform;
 import javafx.event.ActionEvent;
 import javafx.fxml.FXML;
 import javafx.fxml.Initializable;
+import javafx.scene.control.Alert;
 import javafx.scene.control.ListView;
 import javafx.scene.control.PasswordField;
 import javafx.scene.control.TextField;
@@ -43,6 +44,13 @@ public class Controller implements Initializable {
 
     public static final String LOCAL_STORAGE = "localStorage/";
 
+    public static void warningWindow() {
+        Alert alert = new Alert(Alert.AlertType.WARNING);
+        alert.setTitle("Authentication is failed");
+        alert.setContentText("Wrong login or password. Try again!");
+        alert.showAndWait();
+    }
+
     public void sendAuth(ActionEvent event) throws Exception {
         String login = loginField.getText();
         String pass = passField.getText();
@@ -50,15 +58,20 @@ public class Controller implements Initializable {
         setUserDir(login);
     }
 
-    public void copyFromClient(ActionEvent event) {
+    public void copyFromClient(ActionEvent event) throws Exception {
+        mService.sendMessage(MessageType.SEND_FILE_TO_SERVER, leftListItem);
     }
 
-    public void moveFromClient(ActionEvent event) {
+    public void moveFromClient(ActionEvent event) throws Exception {
+        copyFromClient(null);
+        Thread.sleep(2000);
+        deleteOnClient(null);
+
     }
 
     public void deleteOnClient(ActionEvent event) throws IOException {
-        String file =fileListClient.getSelectionModel().getSelectedItem();
-        Path path = Paths.get(LOCAL_STORAGE + userDir +"/"+ file);
+        String file = fileListClient.getSelectionModel().getSelectedItem();
+        Path path = Paths.get(LOCAL_STORAGE + userDir + "/" + file);
         Files.delete(path);
         fileListClient.getItems().remove(file);
     }
@@ -67,10 +80,14 @@ public class Controller implements Initializable {
         mService.sendMessage(MessageType.SEND_FILE_FROM_SERVER, rightListItem);
     }
 
-    public void moveFromServer(ActionEvent event) {
+    public void moveFromServer(ActionEvent event) throws Exception {
+        copyFromServer(null);
+        Thread.sleep(2000);
+        deleteOnServer(null);
     }
 
-    public void DeleteOnServer(ActionEvent event) {
+    public void deleteOnServer(ActionEvent event) throws Exception {
+        mService.sendMessage(MessageType.DELETE, rightListItem);
     }
 
 
@@ -101,7 +118,7 @@ public class Controller implements Initializable {
     }
 
     public String getUserDir() {
-        return userDir;
+        return (LOCAL_STORAGE + userDir + "/");
     }
 
     public void LeftItemListClicked(MouseEvent mouseEvent) {
