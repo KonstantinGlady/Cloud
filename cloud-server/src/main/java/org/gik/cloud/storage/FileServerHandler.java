@@ -86,7 +86,6 @@ public class FileServerHandler extends ChannelInboundHandlerAdapter {
                 fileLengthLongReceived++;
                 if (fileLengthLongReceived >= fileLengthLong) {
                     out.close();
-                    System.out.println("close file");
                     curStat = Stat.INIT;
                     mType = MessageType.NONE;
                     fileLengthLongReceived = 0;

@@ -62,12 +62,16 @@ public class Controller implements Initializable {
         mService.sendMessage(MessageType.SEND_FILE_TO_SERVER, leftListItem);
     }
 
-    public void moveFromClient(ActionEvent event) {
+    public void moveFromClient(ActionEvent event) throws Exception {
+        copyFromClient(null);
+        Thread.sleep(2000);
+        deleteOnClient(null);
+
     }
 
     public void deleteOnClient(ActionEvent event) throws IOException {
-        String file =fileListClient.getSelectionModel().getSelectedItem();
-        Path path = Paths.get(LOCAL_STORAGE + userDir +"/"+ file);
+        String file = fileListClient.getSelectionModel().getSelectedItem();
+        Path path = Paths.get(LOCAL_STORAGE + userDir + "/" + file);
         Files.delete(path);
         fileListClient.getItems().remove(file);
     }
@@ -76,11 +80,14 @@ public class Controller implements Initializable {
         mService.sendMessage(MessageType.SEND_FILE_FROM_SERVER, rightListItem);
     }
 
-    public void moveFromServer(ActionEvent event) {
+    public void moveFromServer(ActionEvent event) throws Exception {
+        copyFromServer(null);
+        Thread.sleep(2000);
+        deleteOnServer(null);
     }
 
-    public void DeleteOnServer(ActionEvent event) throws Exception {
-        mService.sendMessage(MessageType.DELETE,rightListItem);
+    public void deleteOnServer(ActionEvent event) throws Exception {
+        mService.sendMessage(MessageType.DELETE, rightListItem);
     }
 
 
@@ -125,5 +132,4 @@ public class Controller implements Initializable {
     public void RefreshList(ActionEvent event) throws Exception {
         reloadUI();
     }
-
 }
