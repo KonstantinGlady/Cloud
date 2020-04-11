@@ -1,5 +1,6 @@
 package org.gik.cloud.storage.client.controller;
 
+import javafx.application.Platform;
 import javafx.event.ActionEvent;
 import javafx.fxml.FXML;
 import javafx.fxml.Initializable;
@@ -36,13 +37,23 @@ public class Controller implements Initializable {
     @FXML
     public ListView<String> fileListServer;
 
-
+    private static Controller instance;
     private MessageService mService;
     private String userDir;
     private String leftListItem;
     private String rightListItem;
 
     public static final String LOCAL_STORAGE = "localStorage/";
+
+    public Controller() {
+    }
+
+    public static Controller getInstance() {
+        if (instance == null) {
+            instance = new Controller();
+        }
+        return instance;
+    }
 
     public static void warningWindow() {
         Alert alert = new Alert(Alert.AlertType.WARNING);
@@ -59,31 +70,30 @@ public class Controller implements Initializable {
     }
 
     public void copyFromClient(ActionEvent event) throws Exception {
-        mService.sendMessage(MessageType.SEND_FILE_TO_SERVER, leftListItem);
+        mService.sendMessage(MessageType.COPY_FILE_TO_SERVER, leftListItem);
     }
 
     public void moveFromClient(ActionEvent event) throws Exception {
-        copyFromClient(null);
-        Thread.sleep(1000);
-        deleteOnClient(null);
-
+        mService.sendMessage(MessageType.MOVE_FILE_TO_SERVER, leftListItem);
     }
 
     public void deleteOnClient(ActionEvent event) throws IOException {
         String file = fileListClient.getSelectionModel().getSelectedItem();
+        deleteFile(file);
+    }
+
+    public void deleteFile(String file) throws IOException {
         Path path = Paths.get(LOCAL_STORAGE + userDir + "/" + file);
         Files.delete(path);
         fileListClient.getItems().remove(file);
     }
 
     public void copyFromServer(ActionEvent event) throws Exception {
-        mService.sendMessage(MessageType.SEND_FILE_FROM_SERVER, rightListItem);
+        mService.sendMessage(MessageType.COPY_FILE_FROM_SERVER, rightListItem);
     }
 
     public void moveFromServer(ActionEvent event) throws Exception {
-        copyFromServer(null);
-        Thread.sleep(1000);
-        deleteOnServer(null);
+        mService.sendMessage(MessageType.MOVE_FILE_FROM_SERVER, rightListItem);
     }
 
     public void deleteOnServer(ActionEvent event) throws Exception {
@@ -93,7 +103,9 @@ public class Controller implements Initializable {
 
     @Override
     public void initialize(URL location, ResourceBundle resources) {
-        mService = new MessageService(this);
+        instance = this;
+        mService = new MessageService();
+
     }
 
     public void reloadUI() throws Exception {
@@ -135,5 +147,9 @@ public class Controller implements Initializable {
 
     public void shutDown() {
         mService.close();
+    }
+
+    public void clearServerList() {
+        Platform.runLater(() -> fileListServer.getItems().clear());
     }
 }
