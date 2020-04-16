@@ -3,10 +3,9 @@ package org.gik.cloud.storage.client.controller;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufAllocator;
 import io.netty.channel.*;
-import javafx.application.Platform;
 import org.gik.cloud.storage.client.network.Network;
 import org.gik.cloud.storage.common.MessageType;
-
+import static org.gik.cloud.storage.common.MessageCode.*;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -21,54 +20,50 @@ public class MessageService {
     private Controller controller;
     ByteBuf buf;
 
-    private final byte AUTH_CODE = 22;
-    private final byte GET_DIR = 55;
-    private final byte SEND_FILE_FROM_SERVER = 66;
-    private final byte DELETE_FILE_ON_SERVER = 77;
-    private final byte SEND_FILE_TO_SERVER = 88;
 
-    public MessageService(Controller controller) {
-
+    public MessageService( ) {
         this.network = new Network(this);
-        this.controller = controller;
+        this.controller = Controller.getInstance();
     }
 
-    public Controller getController() {
-        return controller;
-    }
-
-    public void sendMessage(MessageType messageType, String parameter) throws Exception {
-        sendMessage(messageType, parameter, "");
-    }
-
-    public void sendMessage(MessageType messageType, String string, String pass) throws Exception {
+    public void sendMessage(MessageType messageType, String... str) throws Exception {
         if (network.getChannel() == null) {
             network.run();
             channel = network.getChannel();
         }
         switch (messageType) {
             case AUTH:
-                sendAuth(string, pass);
+                sendAuth(str[0], str[1]);
                 break;
             case GET_DIR:
-                getDirFromServer(string);
+                getDirFromServer();
                 break;
-            case SEND_FILE_FROM_SERVER:
-                getFileFromServer(string);
+            case COPY_FILE_FROM_SERVER:
+                getFileFromServer(str[0]);
+                break;
+            case MOVE_FILE_FROM_SERVER:
+                getFileFromServerAndDelete(str[0]);
                 break;
             case DELETE:
-                deleteFileOnServer(string);
+                deleteFileOnServer(str[0]);
                 break;
-            case SEND_FILE_TO_SERVER:
-                sendFileToServer(string);
+            case COPY_FILE_TO_SERVER:
+                sendFile(str[0], false);
+                break;
+            case MOVE_FILE_TO_SERVER:
+                sendFile(str[0], true);
                 break;
             default:
                 break;
         }
     }
 
-    private void sendFileToServer(String fileName) throws IOException {
-        sendByte(SEND_FILE_TO_SERVER, false);
+    private void sendFile(String fileName, boolean deleteFile) throws IOException {
+        if (deleteFile) {
+            sendByte(MOVE_FILE_TO_SERVER, false);
+        } else {
+            sendByte(COPY_FILE_TO_SERVER, false);
+        }
         sendInt(fileName.length());
         sendString(fileName, false);
         Path path = Paths.get(controller.getUserDir() + fileName);
@@ -81,35 +76,27 @@ public class MessageService {
     private void sendLong(long size) {
         ByteBuf buf = ByteBufAllocator.DEFAULT.buffer(8);
         buf.writeLong(size);
-        if (false) {
-            channel.writeAndFlush(buf);
-        } else {
-            channel.write(buf);
-        }
+        channel.write(buf);
     }
 
-
-    private void deleteFileOnServer(String fileName) {
+    public void deleteFileOnServer(String fileName) {
         sendByte(DELETE_FILE_ON_SERVER, false);
         sendInt(fileName.length());
         sendString(fileName, true);
-
-        Platform.runLater(() -> {
-            try {
-                controller.reloadUIServer();
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
-        });
     }
 
     private void getFileFromServer(String fileName) {
-        sendByte(SEND_FILE_FROM_SERVER, false);
+        sendByte(COPY_FILE_FROM_SERVER, false);
+        sendInt(fileName.length());
+        sendString(fileName, true);
+    }
+    private void getFileFromServerAndDelete(String fileName) {
+        sendByte(MOVE_FILE_FROM_SERVER, false);
         sendInt(fileName.length());
         sendString(fileName, true);
     }
 
-    private void getDirFromServer(String userDir) {
+    private void getDirFromServer() {
         sendByte(GET_DIR, true);
     }
 

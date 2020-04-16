@@ -10,30 +10,27 @@ import org.gik.cloud.storage.common.MessageType;
 import java.io.*;
 import java.nio.charset.StandardCharsets;
 
-public class FileClientHandler extends ChannelInboundHandlerAdapter {
+import static org.gik.cloud.storage.common.MessageCode.*;
 
-    public enum Stat {
+public class FileClientHandler extends ChannelInboundHandlerAdapter  {
+
+
+    private enum Stat {
         INIT, LENGTH, FILE_LENGTH, NAME, WRITE_FILE;
     }
+
     private MessageType mType = MessageType.NONE;
     private Stat curState = Stat.INIT;
     private BufferedOutputStream out;
     private long fileLengthLong;
     private long fileLengthLongReceived;
-
-    private static final byte AUTH_CODE = 22;
-    private static final byte AUTH_CODE_ACCEPTED = 33;
-    private static final byte AUTH_CODE_FAIL = 44;
-    private static final byte GET_DIR_CODE = 55;
-    private static final byte GET_FILE = 66;
-    private final byte REFRESH_UI = 99;
-
-   // private final MessageService mService;
+    private String deleteThisFileName = "";
     private Controller controller;
+    private MessageService mService;
 
     public FileClientHandler(MessageService messageService) {
-    //    this.mService = messageService;
-        this.controller = messageService.getController();
+        this.mService = messageService;
+        controller = Controller.getInstance();
     }
 
     @Override
@@ -52,11 +49,20 @@ public class FileClientHandler extends ChannelInboundHandlerAdapter {
                 case GET_DIR:
                     getDirFromServer(buf);
                     break;
-                case SEND_FILE_FROM_SERVER:
-                    getFileFromServer(buf);
+                case COPY_FILE_FROM_SERVER:
+                    getFileFromServer(buf, false);
+                    break;
+                case MOVE_FILE_FROM_SERVER:
+                    getFileFromServer(buf, true);
                     break;
                 case REFRESH_UI:
                     refreshUI();
+                    break;
+                case DELETE_FILE_ON_CLIENT:
+                    deleteFile(buf);
+                    break;
+                case CLEAR_SERVER_LIST:
+                    clearServerList();
                     break;
                 case NONE:
                     break;
@@ -66,6 +72,24 @@ public class FileClientHandler extends ChannelInboundHandlerAdapter {
         if (buf.readableBytes() == 0) {
             buf.release();
         }
+    }
+
+    private void clearServerList() {
+        controller.clearServerList();
+    }
+
+    private void deleteFile(ByteBuf buf) throws IOException {
+        int length = getStringLength(buf);
+        String name = getStringFromBuf(buf, length, false);
+        Platform.runLater(() -> {
+            try {
+                controller.deleteFile(name);
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        });
+        mType = MessageType.NONE;
+        curState = Stat.INIT;
     }
 
     private void refreshUI() {
@@ -83,9 +107,9 @@ public class FileClientHandler extends ChannelInboundHandlerAdapter {
         Platform.runLater(Controller::warningWindow);
     }
 
-    private void getFileFromServer(ByteBuf buf) throws Exception {
-        int nameLength = getStringLength(buf);
-        getStringFromBuf(buf, nameLength, true);
+    private void getFileFromServer(ByteBuf buf, boolean delOrigFile) throws Exception {
+        int length = getStringLength(buf);
+        deleteThisFileName = ((deleteThisFileName.equals("")) ? getStringFromBuf(buf, length, true) : deleteThisFileName);
         getStringLengthLong(buf);
         if (curState == Stat.WRITE_FILE) {
             while (buf.readableBytes() > 0) {
@@ -96,18 +120,16 @@ public class FileClientHandler extends ChannelInboundHandlerAdapter {
                     curState = Stat.INIT;
                     mType = MessageType.NONE;
                     fileLengthLongReceived = 0;
-                    Platform.runLater(() -> {
-                        try {
-                            controller.reloadUILocal();
-                        } catch (Exception e) {
-                            e.printStackTrace();
-                        }
-                    });
+                    if (delOrigFile) {
+                        mService.deleteFileOnServer(deleteThisFileName);
+                    }
+                    deleteThisFileName = "";
                     break;
                 }
             }
         }
     }
+
 
     private void getStringLengthLong(ByteBuf buf) {
         if (curState == Stat.FILE_LENGTH) {
@@ -118,7 +140,7 @@ public class FileClientHandler extends ChannelInboundHandlerAdapter {
         }
     }
 
-    private void getDirFromServer(ByteBuf buf) throws FileNotFoundException {
+    private void getDirFromServer(ByteBuf buf) throws Exception {
         int strLength = getStringLength(buf);
         String strFromBuf = getStringFromBuf(buf, strLength, false);
         Platform.runLater(() -> controller.fileListServer.getItems().add(strFromBuf));
@@ -135,7 +157,6 @@ public class FileClientHandler extends ChannelInboundHandlerAdapter {
                 bytes[i] = buf.readByte();
                 i++;
             }
-            // buf.readBytes(bytes);
             str = new String(bytes, StandardCharsets.UTF_8);
             if (nextStateGetFile) {
                 out = new BufferedOutputStream(new FileOutputStream(controller.getUserDir() + str));
@@ -170,16 +191,27 @@ public class FileClientHandler extends ChannelInboundHandlerAdapter {
                     mType = MessageType.AUTH_CODE_FAIL;
                     curState = Stat.INIT;
                     break;
-                case GET_DIR_CODE:
+                case GET_DIR:
                     mType = MessageType.GET_DIR;
                     curState = Stat.LENGTH;
                     break;
-                case GET_FILE:
-                    mType = MessageType.SEND_FILE_FROM_SERVER;
+                case COPY_FILE_FROM_SERVER:
+                    mType = MessageType.COPY_FILE_FROM_SERVER;
+                    curState = Stat.LENGTH;
+                    break;
+                case MOVE_FILE_FROM_SERVER:
+                    mType = MessageType.MOVE_FILE_FROM_SERVER;
                     curState = Stat.LENGTH;
                     break;
                 case REFRESH_UI:
                     mType = MessageType.REFRESH_UI;
+                    break;
+                case DELETE_FILE_ON_CLIENT:
+                    mType = MessageType.DELETE_FILE_ON_CLIENT;
+                    curState = Stat.LENGTH;
+                    break;
+                case CLEAR_SERVER_LIST:
+                    mType = MessageType.CLEAR_SERVER_LIST;
                     break;
                 default:
                     mType = MessageType.NONE;

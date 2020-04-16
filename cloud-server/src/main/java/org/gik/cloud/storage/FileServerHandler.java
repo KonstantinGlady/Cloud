@@ -12,23 +12,15 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 
-public class FileServerHandler extends ChannelInboundHandlerAdapter {
+import static org.gik.cloud.storage.common.MessageCode.*;
 
+public class FileServerHandler extends ChannelInboundHandlerAdapter {
 
     public static final String SERVER_STORAGE = "serverStorage/";
 
-    public enum Stat {
-        INIT, LENGTH, LENGTH_PASS, FILE_LENGTH, WRITE_FILE, NAME, PASS;
+    private enum Stat {
+        INIT, LENGTH, FILE_LENGTH, WRITE_FILE, NAME, PASS;
     }
-
-    private final byte AUTH_CODE = 22;
-    private final byte AUTH_CODE_ACCEPTED = 33;
-    private final byte AUTH_CODE_FAIL = 44;
-    private final byte GET_DIR = 55;
-    private final byte SEND_FILE_FROM_SERVER = 66;
-    private final byte DELETE_FILE_ON_SERVER = 77;
-    private final byte SEND_FILE_TO_SERVER = 88;
-    private  final byte REFRESH_UI = 99;
 
     private Stat curStat = Stat.INIT;
     private MessageType mType = MessageType.NONE;
@@ -41,6 +33,9 @@ public class FileServerHandler extends ChannelInboundHandlerAdapter {
 
     private long fileLengthLong;
     private long fileLengthLongReceived;
+
+    private String fileName;
+    private int nameLength;
 
     public void channelRead(ChannelHandlerContext ctx, Object obj) throws Exception {
         ByteBuf buf = ((ByteBuf) obj);
@@ -56,17 +51,20 @@ public class FileServerHandler extends ChannelInboundHandlerAdapter {
                 case GET_DIR:
                     sendDir();
                     break;
-                case SEND_FILE_FROM_SERVER:
-                    sendFile(buf);
+                case COPY_FILE_FROM_SERVER:
+                    sendFile(buf, false);
                     break;
                 case MOVE_FILE_FROM_SERVER:
-
+                    sendFile(buf, true);
+                    break;
+                case COPY_FILE_TO_SERVER:
+                    getFile(buf, false);
+                    break;
+                case MOVE_FILE_TO_SERVER:
+                    getFile(buf, true);
                     break;
                 case DELETE:
                     deleteFile(buf);
-                    break;
-                case SEND_FILE_TO_SERVER:
-                    getFileFromClient(buf);
                     break;
             }
         }
@@ -76,8 +74,8 @@ public class FileServerHandler extends ChannelInboundHandlerAdapter {
         }
     }
 
-    private void getFileFromClient(ByteBuf buf) throws IOException {
-        int nameLength = getNameLength(buf);
+    private void getFile(ByteBuf buf, boolean delOrigFile) throws IOException {
+        getNameLength(buf);
         getFileName(buf, nameLength);
         getStringLengthLong(buf);
         if (curStat == Stat.WRITE_FILE) {
@@ -89,13 +87,25 @@ public class FileServerHandler extends ChannelInboundHandlerAdapter {
                     curStat = Stat.INIT;
                     mType = MessageType.NONE;
                     fileLengthLongReceived = 0;
-                           sendByte(REFRESH_UI, true);
+                    if (delOrigFile) {
+                        deleteFileOnClient(nameLength, fileName);
+                    }
+                    nameLength = 0;
+                    fileName = "";
+                    sendByte(REFRESH_UI, true);
                     break;
                 }
             }
         }
 
     }
+
+    private void deleteFileOnClient(int length, String name) {
+        sendByte(DELETE_FILE_ON_CLIENT, false);
+        sendInt(length);
+        sendString(name, true);
+    }
+
     private void getStringLengthLong(ByteBuf buf) {
         if (curStat == Stat.FILE_LENGTH) {
             if (buf.readableBytes() >= 8) {
@@ -104,16 +114,16 @@ public class FileServerHandler extends ChannelInboundHandlerAdapter {
             }
         }
     }
-    private int getNameLength(ByteBuf buf) {
-        int strLength = 0;
+
+    private void getNameLength(ByteBuf buf) {
         if (curStat == Stat.LENGTH) {
             if (buf.readableBytes() >= 4) {
-                strLength = buf.readInt();
+                nameLength = buf.readInt();
                 curStat = Stat.NAME;
             }
         }
-        return strLength;
     }
+
     private void getFileName(ByteBuf buf, int strLength) throws FileNotFoundException {
         if (curStat == Stat.NAME) {
             byte[] bytes = new byte[strLength];
@@ -123,8 +133,8 @@ public class FileServerHandler extends ChannelInboundHandlerAdapter {
                 bytes[i] = buf.readByte();
                 i++;
             }
-            String str = new String(bytes, StandardCharsets.UTF_8);
-            out = new BufferedOutputStream(new FileOutputStream(SERVER_STORAGE + login + "/" + str));
+            fileName = new String(bytes, StandardCharsets.UTF_8);
+            out = new BufferedOutputStream(new FileOutputStream(SERVER_STORAGE + login + "/" + fileName));
             curStat = Stat.FILE_LENGTH;
         }
     }
@@ -137,54 +147,52 @@ public class FileServerHandler extends ChannelInboundHandlerAdapter {
         Path path = Paths.get(SERVER_STORAGE + login + "/" + name);
         Files.delete(path);
         curStat = Stat.INIT;
+        sendByte(REFRESH_UI, true);
     }
 
-    private void sendFile(ByteBuf buf) throws IOException {
+    private void sendFile(ByteBuf buf, boolean delOrigFile) throws IOException {
+        if (delOrigFile) {
+            sendByte(MOVE_FILE_FROM_SERVER, false);
+        } else {
+            sendByte(COPY_FILE_FROM_SERVER, false);
+        }
         int length = getStringLength(buf);
         String name = getStringFromBuf(buf, length);
-
-        sendByte(SEND_FILE_FROM_SERVER, false);
         Path path = Paths.get(SERVER_STORAGE + login + "/" + name);
-        sendInt(name.length(), false);
+        sendInt(name.length());
         sendString(name, false);
-        sendLong(Files.size(path), false);
+        sendLong(Files.size(path));
 
         FileRegion region = new DefaultFileRegion
                 (new FileInputStream(path.toFile()).getChannel(), 0, Files.size(path));
         ctx.writeAndFlush(region).addListener(ChannelFutureListener.CLOSE_ON_FAILURE);
+        sendByte(REFRESH_UI, true);
     }
 
-    private void sendLong(long size, boolean flash) {
+    private void sendLong(long size) {
         buf = ByteBufAllocator.DEFAULT.buffer(8);
         buf.writeLong(size);
-        if (flash) {
-            ctx.writeAndFlush(buf);
-        } else {
-            ctx.write(buf);
-        }
+        ctx.write(buf);
     }
 
     private void sendDir() throws IOException {
-
+        sendByte(CLEAR_SERVER_LIST, true);
         Files.list(Paths.get(SERVER_STORAGE + login))
                 .map(path -> path.getFileName().toString())
                 .forEach(o -> {
                     sendByte(GET_DIR, false);
-                    sendInt(o.length(), false);
+                    sendInt(o.length());
                     sendString(o, true);
                 });
         curStat = Stat.INIT;
     }
 
-    private void sendInt(int length, boolean flash) {
+    private void sendInt(int length) {
         buf = ByteBufAllocator.DEFAULT.buffer(4);
         buf.writeInt(length);
-        if (flash) {
-            ctx.writeAndFlush(buf);
-        } else {
-            ctx.write(buf);
-        }
+        ctx.write(buf);
     }
+
 
     private void sendByte(byte code, boolean flash) {
         buf = ByteBufAllocator.DEFAULT.buffer(1);
@@ -218,24 +226,21 @@ public class FileServerHandler extends ChannelInboundHandlerAdapter {
         int loginLength;
         int passLength;
 
-        loginLength = getStringLength(buf, Stat.LENGTH, Stat.NAME);
-        login = getStringFromBuf(buf, loginLength, Stat.NAME, Stat.LENGTH_PASS);
-        passLength = getStringLength(buf, Stat.LENGTH_PASS, Stat.PASS);
-        password = getStringFromBuf(buf, passLength, Stat.PASS, Stat.INIT);
+        loginLength = getStringLength(buf);
+        login = getStringFromBuf(buf, loginLength);
+        curStat = Stat.LENGTH;
+
+        passLength = getStringLength(buf);
+        password = getStringFromBuf(buf, passLength);
+        curStat = Stat.INIT;
     }
 
     private String getStringFromBuf(ByteBuf buf, int strLength) {
-        Stat statIn = Stat.NAME;
-        Stat statOut = Stat.INIT;
-        return getStringFromBuf(buf, strLength, statIn, statOut);
-    }
-
-    private String getStringFromBuf(ByteBuf buf, int strLength, Stat statIn, Stat statOut) {
         String stringOut = "";
-        if (curStat == statIn) {
+        if (curStat == Stat.NAME) {
             byte[] name = new byte[strLength];
             buf.readBytes(name);
-            curStat = statOut;
+            curStat = Stat.INIT;
             stringOut = new String(name, StandardCharsets.UTF_8);
         }
         return stringOut;
@@ -243,17 +248,11 @@ public class FileServerHandler extends ChannelInboundHandlerAdapter {
     }
 
     private int getStringLength(ByteBuf buf) {
-        Stat statIn = Stat.LENGTH;
-        Stat statOut = Stat.NAME;
-        return getStringLength(buf, statIn, statOut);
-    }
-
-    private int getStringLength(ByteBuf buf, Stat statIn, Stat statOut) {
         int stringLength = 0;
-        if (curStat == statIn) {
+        if (curStat == Stat.LENGTH) {
             if (buf.readableBytes() >= 4) {
                 stringLength = buf.readInt();
-                curStat = statOut;
+                curStat = Stat.NAME;
             }
         }
         return stringLength;
@@ -266,7 +265,6 @@ public class FileServerHandler extends ChannelInboundHandlerAdapter {
         } else {
             sendByte(AUTH_CODE_FAIL, true);
         }
-        curStat = Stat.INIT;
     }
 
     private void getMessageType(ByteBuf buf) {
@@ -277,12 +275,16 @@ public class FileServerHandler extends ChannelInboundHandlerAdapter {
                 mType = MessageType.AUTH;
             } else if (messageType == GET_DIR) {
                 mType = MessageType.GET_DIR;
-            } else if (messageType == SEND_FILE_FROM_SERVER) {
-                mType = MessageType.SEND_FILE_FROM_SERVER;
+            } else if (messageType == COPY_FILE_FROM_SERVER) {
+                mType = MessageType.COPY_FILE_FROM_SERVER;
             } else if (messageType == DELETE_FILE_ON_SERVER) {
                 mType = MessageType.DELETE;
-            } else if (messageType == SEND_FILE_TO_SERVER) {
-                mType = MessageType.SEND_FILE_TO_SERVER;
+            } else if (messageType == COPY_FILE_TO_SERVER) {
+                mType = MessageType.COPY_FILE_TO_SERVER;
+            } else if (messageType == MOVE_FILE_TO_SERVER) {
+                mType = MessageType.MOVE_FILE_TO_SERVER;
+            } else if (messageType == MOVE_FILE_FROM_SERVER) {
+                mType = MessageType.MOVE_FILE_FROM_SERVER;
             }
         }
     }
